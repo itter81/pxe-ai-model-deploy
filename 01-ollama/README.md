@@ -1,4 +1,3 @@
-01-ollama/README.md
 # 01-ollama | Ollama 全自动 PXE 部署
 
 基于 iPXE + Ubuntu Autoinstall，实现从裸机到 Ollama 推理服务就绪的零人工干预交付。
