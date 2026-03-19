@@ -100,21 +100,88 @@ File: `/data/pxe/iso/boot.ipxe`
 
 ```bash
 #!ipxe
-:start
-menu PXE Boot Menu
-item --gap -- ------------------------- Operating Systems -------------------------
-item ubuntu-22.04.5-custom  Ubuntu-22.04.5-Custom-Autoinstall
-item --gap -- --------------------------- Utilities ----------------------------
-item shell iPXE Shell (Debug)
+# /data/pxe/iso/menus/main.ipxe
 
+:start
+#主界面菜单名单
+menu PXE Boot Menu -itter
+item --gap -- ------------------------- Operating Systems -------------------------
+
+#这一行标签是引用ios和线的菜单;这一行是PXE中给人看的并不影响实际引用
+item ubuntu-22.04.3           Ubuntu-22.04.3-Autoinstall
+item ubuntu-22.04.5           Ubuntu-22.04.5-Autoinstall
+item ubuntu-22.04.5-custom    Ubuntu-22.04.5-Custom-Autoinstall
+item ubuntu-24.04.3           Ubuntu-24.04.3-Autoinstall
+item ubuntu-25.04             Ubuntu-25.04-Autoinstall
+item ubuntu-25.10             Ubuntu-25.10-Autoinstall
+
+#centos菜单和上面的是一个功能
+item centos-7.9               CentOS-7.9
+item centos-longxi-8.10       CentOS-Longxi-8.10
+
+item --gap -- --------------------------- Utilities ----------------------------
+item shell        iPXE Shell (Debug)
+
+
+
+
+######################默认调整界面,选择哪个菜单就默认PXE用那个###############################
 choose --default ubuntu-22.04.5-custom --timeout 10000 target && goto ${target}
+#############################################################################################
+
+
+
+
+
+
+##################菜单界面起-上面的大菜单会对应到下面的子菜单################################
+#wubantu的菜单#################################
+:ubuntu-22.04.3
+set os-name ubuntu-22.04.3
+goto boot-ubuntu
+
+:ubuntu-22.04.5
+set os-name ubuntu-22.04.5
+goto boot-ubuntu
+
+:ubuntu-24.04.3
+set os-name ubuntu-24.04.3
+goto boot-ubuntu
+
+:ubuntu-25.04
+set os-name ubuntu-25.04
+goto boot-ubuntu
+
+:ubuntu-25.10
+set os-name ubuntu-25.10
+goto boot-ubuntu
 
 :ubuntu-22.04.5-custom
 set os-name ubuntu-22.04.5-custom
 goto boot-ubuntu
 
+
+
+#centos的子菜单################################
+:centos-7.9
+set os-name centos-7.9
+set iso-name centos-7.9.iso
+goto boot-centos
+
+:centos-longxi-8.10
+set os-name centos-longxi-8.10
+set iso-name centos-8.10.iso
+goto boot-centos
+
+
+#################菜单界面止##############################################################
+
+
+#####################乌班图引用应答文件逻辑#################################################
 :boot-ubuntu
 set base-url http://192.168.70.230/wubantu
+
+
 kernel ${base-url}/${os-name}/casper/vmlinuz \
     initrd=initrd \
     boot=casper \
@@ -126,8 +193,33 @@ kernel ${base-url}/${os-name}/casper/vmlinuz \
 initrd ${base-url}/${os-name}/casper/initrd
 boot
 
+
+
+#####################CENTOS引用应答文件逻辑#################################################
+:boot-centos
+set base-url http://192.168.70.230/centos
+
+
+#net.ifnames=0防止网卡名变成 ens33之类的
+kernel ${base-url}/${os-name}/os/images/pxeboot/vmlinuz \
+    initrd=initrd.img \
+    inst.repo=${base-url}/${os-name}/os/ \
+    inst.ks=${base-url}/${os-name}/ks/${os-name}.cfg \
+    ip=dhcp \
+    net.ifnames=0 biosdevname=0
+
+
+#这里的initrd指令负责将驱动盘拉入内存
+initrd ${base-url}/${os-name}/os/images/pxeboot/initrd.img
+boot
+###########################################################################################################################################
+
+
 :shell
 shell
+ 
+
+#########全部截止###########################################################################################################################
 ```
 
 ---
