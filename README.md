@@ -1,6 +1,6 @@
 # pxe-ai-model-deploy
 
-**PXE 鍏ㄨ嚜鍔ㄨ鏈?+ AI 鎺ㄧ悊搴曞骇涓€閿儴缃?*
+**PXE 全自动装机 + AI 推理底座一键部署**
 
 *Fully automated bare-metal provisioning with GPU drivers and AI inference stack via PXE*
 
@@ -8,9 +8,9 @@
 
 ## What is this?
 
-This project automates the full deployment of an AI inference node 鈥?from a bare-metal server to a fully operational GPU inference service 鈥?with **zero manual intervention**.
+This project automates the full deployment of an AI inference node — from a bare-metal server to a fully operational GPU inference service — with **zero manual intervention**.
 
-涓€鍙拌８鏈猴紝PXE 鍚姩锛岄噸鍚悗 GPU 椹卞姩 + CUDA + 鎺ㄧ悊妗嗘灦鍏ㄩ儴灏辩华锛屽叏绋嬫棤闇€鐧诲綍鐩爣鏈哄櫒銆?
+一台裸机，PXE 启动，重启后 GPU 驱动 + CUDA + 推理框架全部就绪，全程无需登录目标机器。
 
 ---
 
@@ -18,11 +18,11 @@ This project automates the full deployment of an AI inference node 鈥?from a ba
 
 | # | Framework | Status |
 |---|-----------|--------|
-| 01 | [Ollama](./01-ollama/) | 鉁?Done |
-| 02 | [vLLM](./02-vllm/) | 馃毀 WIP |
-| 03 | [TGI](./03-tgi/) | 馃毀 WIP |
-| 04 | [llama.cpp](./04-llamacpp/) | 馃毀 WIP |
-| 05 | [TensorRT-LLM](./05-trtllm/) | 馃毀 WIP |
+| 01 | [Ollama](./01-ollama/) | ✅ Done |
+| 02 | [vLLM](./02-vllm/) | 🚧 WIP |
+| 03 | [TGI](./03-tgi/) | 🚧 WIP |
+| 04 | [llama.cpp](./04-llamacpp/) | 🚧 WIP |
+| 05 | [TensorRT-LLM](./05-trtllm/) | 🚧 WIP |
 
 ---
 
@@ -47,7 +47,7 @@ The root cause: the Live kernel has already loaded `nouveau`, which occupies the
 
 **Solution:** `--skip-module-load`
 
-Found by scanning the full `nvidia-installer --advanced-options` parameter list. This flag skips the `modprobe` step entirely 鈥?files are installed and compiled, but not loaded. On first real boot, `nouveau` is blacklisted and `nvidia` loads cleanly.
+Found by scanning the full `nvidia-installer --advanced-options` parameter list. This flag skips the `modprobe` step entirely — files are installed and compiled, but not loaded. On first real boot, `nouveau` is blacklisted and `nvidia` loads cleanly.
 
 ```bash
 /tmp/nvidia.run --silent \
@@ -61,8 +61,8 @@ Found by scanning the full `nvidia-installer --advanced-options` parameter list.
 
 ## Author
 
-**瀹夋爧姊?(An Dongliang)**
-Infrastructure & AI Ops Engineer | RHCE 路 HCIE 路 KYCP
+**安栋梁 (An Dongliang)**
+Infrastructure & AI Ops Engineer | RHCE · HCIE · KYCP
 
 ---
 
