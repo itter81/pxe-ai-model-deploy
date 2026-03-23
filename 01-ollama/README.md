@@ -1,8 +1,9 @@
 # 01-ollama | PXE Automated Deploy - Ollama Inference Stack
 
-基于 iPXE + Ubuntu Autoinstall，实现从裸机到 Ollama 推理服务就绪的零人工干预交付。
+实现从裸机到 Ollama 推理服务就绪的全自动交付，零人工干预。
+底层交付方式：iPXE + Ubuntu Autoinstall 离线装机。
 
-Automated bare-metal deployment of Ollama inference stack via iPXE + Ubuntu Autoinstall. Zero manual intervention required.
+Automated GPU Inference Node Deploy - Ollama
 
 ---
 
