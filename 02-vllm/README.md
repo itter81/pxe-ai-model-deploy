@@ -404,23 +404,7 @@ vLLM compiles CUDA utilities at startup even with TRITON_ATTN backend. Missing `
 **2. pip download interrupted**
 Do NOT save to `/tmp` — cleared on reboot. Use `/data/` or other persistent path.
 
-**3. vllm-pkgs download DNS failure**
-Fix systemd-resolved (do not edit `/etc/resolv.conf` directly — overwritten):
-```bash
-cat > /etc/systemd/resolved.conf << 'EOF'
-[Resolve]
-DNS=223.5.5.5 114.114.114.114
-EOF
-systemctl restart systemd-resolved
-```
-
-**4. wget exit status 8 (404)**
-Check file path carefully. `pip3-pkgs.tar.gz` and `python3-dev-pkgs.tar.gz` are at `vllm/` root, NOT under `vllm/current/`.
-
-**5. dpkg dependency errors**
-Use `|| true` on dpkg commands to prevent aborting the entire install flow on warnings. vLLM pip install handles Python package dependencies separately.
-
-**6. Live SSH access during installation**
+**3. Live SSH access during installation**
 ```bash
 ssh installer@<target-ip>   # password: ubuntu
 sudo -i
