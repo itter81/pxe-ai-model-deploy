@@ -11,6 +11,7 @@
 This project automates the full deployment of an AI inference node — from a bare-metal server to a fully operational GPU inference service — with **zero manual intervention**.
 
 一台裸机，PXE 启动，重启后 GPU 驱动 + CUDA + 推理框架全部就绪，全程无需登录目标机器。
+此次是证明验证“可行性”有些步骤请在正式环境执行，比如“Qwen/Qwen2.5-0.5B的下载”请自行评估
 
 ---
 
