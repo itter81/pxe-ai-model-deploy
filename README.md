@@ -1,9 +1,8 @@
 # pxe-ai-model-deploy
 
-**PXE 全自动装机 + AI 推理底座一键部署**
+GPU 推理节点自动化交付体系，从裸机到推理服务就绪，零人工干预
 
-*Fully automated bare-metal provisioning with GPU drivers and AI inference stack via PXE*
-
+Automated GPU inference node delivery — bare-metal to inference-ready, zero manual intervention
 ---
 
 ## What is this?
