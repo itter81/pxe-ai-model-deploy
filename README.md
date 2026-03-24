@@ -7,10 +7,12 @@ Automated GPU inference node delivery — bare-metal to inference-ready, zero ma
 
 ## What is this?
 
-This project automates the full deployment of an AI inference node — from a bare-metal server to a fully operational GPU inference service — with **zero manual intervention**.
-
-一台裸机，PXE 启动，重启后 GPU 驱动 + CUDA + 推理框架全部就绪，全程无需登录目标机器。
-此次是证明验证“可行性”有些步骤请在正式环境执行，比如“Qwen/Qwen2.5-0.5B的下载”请自行评估
+This project automates the full deployment of an AI inference node — from a bare-metal server to a fully operational GPU service — with zero manual intervention.
+Starting with a single PXE boot, the target machine automatically installs GPU drivers, CUDA, and the inference framework upon reboot, requiring no login.
+⚠️ Note: This is currently a Proof of Concept (PoC) to demonstrate feasibility. Certain steps (e.g., downloading the Qwen/Qwen2.5-0.5B model) are for demonstration purposes and should be evaluated/adjusted for formal production environments.
+本项目实现了 AI 推理节点的全自动化部署——从裸金属服务器到完全可用的 GPU 服务，全程零人工干预。
+只需一次 PXE 启动，目标机器重启后即可自动装好 GPU 驱动、CUDA 及推理框架，无需登录。
+⚠️ 注意： 当前版本仅为验证可行性的概念演示 (PoC)。部分步骤（如下载 Qwen/Qwen2.5-0.5B 模型）仅供演示，在正式生产环境中执行时请自行评估和调整
 
 ---
 
