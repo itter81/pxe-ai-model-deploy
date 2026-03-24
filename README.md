@@ -20,8 +20,8 @@ This project automates the full deployment of an AI inference node — from a ba
 |---|-----------|--------|
 | 01 | [Ollama](./01-ollama/) | ✅ Done |
 | 02 | [vLLM](./02-vllm/) | ✅ Done |
-| 03 | [llama.cpp](./04-llamacpp/) | ✅ Done |
-| 04 | [TGI](./03-tgi/) | 🚧 WIP |
+| 03 | [llama.cpp](./03-llamacpp/) | ✅ Done |
+| 04 | [TGI](./04-tgi/) | 🚧 WIP |
 | 05 | [TensorRT-LLM](./05-trtllm/) | 🚧 WIP |
 
 ---
