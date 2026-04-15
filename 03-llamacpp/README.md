@@ -455,6 +455,7 @@ autoinstall:
     - wget http://192.168.70.230/wubantu/ubuntu-22.04.5-custom/payload/gpu-inference/nvidia-driver/current/nvidia.run -O /target/tmp/nvidia.run
     - curtin in-target -- chmod +x /tmp/nvidia.run
     - curtin in-target -- sh -c "/tmp/nvidia.run --silent --no-nouveau-check --skip-module-load --kernel-source-path=/usr/src/linux-headers-5.15.0-119-generic --kernel-name=5.15.0-119-generic 2>&1 | tee /var/log/nvidia-install.log || true"
+    - curtin in-target -- sh -c "apt-mark hold linux-image-5.15.0-119-generic linux-headers-5.15.0-119-generic linux-image-generic linux-headers-generic linux-generic"
 
     # --- CUDA ---
     - wget http://192.168.70.230/wubantu/ubuntu-22.04.5-custom/payload/gpu-inference/cuda/current/cuda.run -O /target/tmp/cuda.run
