@@ -3,7 +3,7 @@
 实现从裸机到 llama.cpp 推理服务就绪的全自动交付，零人工干预。
 底层交付方式：iPXE + Ubuntu Autoinstall 离线装机。
 
-Automated GPU Inference Node Deploy - llama.cpp (Vulkan + CUDA)
+Automated GPU Inference Node Deploy - llama.cpp (CUDA)
 
 ---
 
@@ -27,9 +27,9 @@ HTTP Server (Nginx on 192.168.70.230:80)
 Ubuntu Autoinstall (Cloud-init)
     |
     | 6. Partition, install base system
-    | 7. late-commands: NVIDIA driver + CUDA + Vulkan deps + llama.cpp
+    | 7. late-commands: NVIDIA driver + CUDA + llama.cpp (CUDA build)
     v
-Reboot -> GPU driver + CUDA + llama-server all ready
+Reboot -> GPU driver + CUDA + llama-server (CUDA backend) all ready
 ```
 
 ---
@@ -136,14 +136,13 @@ shell
         │   └── vmlinuz
         ├── cloud-init/
         │   ├── meta-data                  # Empty file (required)
-        │   ├── user-data                  # Active config (symlinked or copied)
+        │   ├── user-data                  # Active config
         │   ├── user-data-ollama           # Ollama version
         │   ├── user-data-vllm             # vLLM version
         │   └── user-data-llamacpp         # llama.cpp version  <-- this doc
         ├── payload/
         │   ├── base/
-        │   │   └── gcc-pkgs/              # 45 offline deb packages
-        │   │       └── gcc-pkgs.tar.gz
+        │   │   └── gcc-pkgs.tar.gz        # 45 offline deb packages
         │   └── gpu-inference/
         │       ├── cuda/
         │       │   ├── current -> cuda-13.2.0-595.45.04
@@ -156,24 +155,26 @@ shell
         │       ├── models/
         │       │   └── qwen2.5-0.5b-instruct-q4_k_m.gguf
         │       └── llama/
-        │           ├── current -> llama-vulkan-b8495
-        │           ├── llama-vulkan-b8495/
-        │           │   ├── llama/         # binaries + shared libs
-        │           │   │   ├── llama-server
-        │           │   │   ├── libggml-vulkan.so
-        │           │   │   ├── libggml.so.0.9.8
-        │           │   │   ├── libllama.so.0.0.8495
-        │           │   │   └── ...
+        │           ├── current -> llama-cuda-src2504      # active version
+        │           ├── llama-cuda-src2504/                # CUDA build (current)
+        │           │   ├── llama/                         # 87 static binaries
+        │           │   │   ├── llama-server               # main inference server ★
+        │           │   │   ├── llama-cli
+        │           │   │   ├── llama-bench
+        │           │   │   ├── llama-quantize
+        │           │   │   └── ...                        # no .so files (static link)
         │           │   ├── llama-server.service
         │           │   └── llama.tar.gz
-        │           └── vulkan-pkgs.tar.gz # Vulkan offline deb packages
+        │           └── llama-vulkan-b8495/                # Vulkan build (backup)
+        │               ├── llama-server.service
+        │               └── llama.tar.gz
         └── ubuntu-22.04.5-custom-live-server-amd64.iso
 ```
 
 **Version upgrade: only change symlink, user-data unchanged:**
 
 ```bash
-ln -sfn llama-vulkan-b8496 /data/pxe/iso/wubantu/ubuntu-22.04.5-custom/payload/gpu-inference/llama/current
+ln -sfn llama-cuda-src2505 /data/pxe/iso/wubantu/ubuntu-22.04.5-custom/payload/gpu-inference/llama/current
 ```
 
 ---
@@ -198,26 +199,44 @@ tar -zcf gcc-pkgs.tar.gz gcc-pkgs/
 
 Key packages included: gcc, gcc-11, cpp-11, make, linux-headers, libc6-dev, libgcc-11-dev, and all their dependencies.
 
-### llama.tar.gz
+### llama.tar.gz (CUDA build from source)
 
-llama.cpp official pre-built Vulkan binary release. Download from:
+**Build info:**
+- llama.cpp version: b8881 (0dedb9ef7)
+- Built with: GNU 11.4.0 for Linux x86_64
+- CUDA architecture: 750 (GTX 1650, compute capability 7.5)
+- Build date: 2025-04
+- Link type: **static** — no .so dependencies, single binary deployment
 
-```
-https://github.com/ggml-org/llama.cpp/releases/download/b8496/llama-b8496-bin-ubuntu-vulkan-x64.tar.gz
-```
-
-**How to prepare:**
+**How to build on a machine with CUDA installed:**
 
 ```bash
-# Download and rename the extracted directory
-wget https://github.com/ggml-org/llama.cpp/releases/download/b8496/llama-b8496-bin-ubuntu-vulkan-x64.tar.gz
-tar xzf llama-b8496-bin-ubuntu-vulkan-x64.tar.gz
-# The extracted folder contains the llama/ directory with all binaries and .so files
-# Re-pack for PXE distribution (extracts to /opt/llama/)
-tar -zcf llama.tar.gz -C llama-b8496-bin-ubuntu-vulkan-x64 .
-```
+# Clone source
+px git clone https://github.com/ggerganov/llama.cpp.git /opt/llama-src
 
-Extraction result: `/opt/llama/llama-server` and all shared libraries directly under `/opt/llama/`.
+# Build with CUDA, static linking, GTX 1650 architecture
+cd /opt/llama-src
+cmake -B build \
+    -DGGML_CUDA=ON \
+    -DGGML_VULKAN=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_CUDA_ARCHITECTURES=75 \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DLLAMA_CURL=OFF
+cmake --build build -j$(nproc)
+
+# Verify GPU recognition
+/opt/llama-src/build/bin/llama-server --list-devices
+# Expected: ggml_cuda_init: found 1 CUDA devices
+
+# Package for PXE distribution
+mkdir -p /tmp/llama-pkg/llama
+cp /opt/llama-src/build/bin/* /tmp/llama-pkg/llama/
+cd /tmp/llama-pkg
+tar -zcf llama.tar.gz llama/
+# Transfer to PXE server
+scp llama.tar.gz root@192.168.70.230:.../llama/llama-cuda-src2504/
+```
 
 **Directory structure inside llama.tar.gz:**
 
@@ -227,56 +246,18 @@ llama/
 ├── llama-cli             # Interactive CLI
 ├── llama-bench           # Benchmark tool
 ├── llama-quantize        # Model quantization tool
-├── libggml-vulkan.so     # Vulkan GPU backend  ★
-├── libggml.so.0.9.8      # GGML core library
-├── libggml-base.so.0.9.8
-├── libllama.so.0.0.8495  # llama inference library
-├── libmtmd.so.0.0.8495   # Multimodal support
-├── libggml-cpu-*.so      # CPU architecture backends (auto-selected)
-│   ├── libggml-cpu-haswell.so
-│   ├── libggml-cpu-alderlake.so
-│   └── ...
-└── LICENSE
+├── llama-batched-bench
+├── llama-imatrix
+├── llama-gguf-split
+├── llama-mtmd-cli
+├── export-graph-ops
+├── test-*                # Test binaries (87 files total)
+└── ...
+# No .so files — all statically linked into each binary
 ```
 
-### vulkan-pkgs.tar.gz
-
-Vulkan runtime dependencies — **GPU vendor-specific**, not universal.
-The packages below are for **NVIDIA GTX 1650 on Ubuntu 22.04**.
-
-**How to prepare on a machine with internet access:**
-
-```bash
-mkdir -p /tmp/vulkan-pkgs && cd /tmp/vulkan-pkgs
-apt-get download \
-    libvulkan1 \
-    vulkan-tools \
-    mesa-vulkan-drivers \
-    libnvidia-gl-580 \
-    libnvidia-common-580 \
-    libnvidia-compute-580 \
-    nvidia-firmware-580-580.126.09 \
-    nvidia-kernel-common-580 \
-    libdrm-amdgpu1 \
-    libllvm15 \
-    libwayland-client0 \
-    libwayland-server0 \
-    libx11-xcb1 \
-    libxcb-dri3-0 \
-    libxcb-present0 \
-    libxcb-randr0 \
-    libxcb-shm0 \
-    libxcb-sync1 \
-    libxcb-xfixes0 \
-    libxshmfence1 \
-    libgbm1 \
-    libpciaccess0 \
-    libnvidia-egl-wayland1
-cd /tmp
-tar -zcf vulkan-pkgs.tar.gz vulkan-pkgs/
-```
-
-> **Note:** Replace `580` with your actual driver version. These packages must match the NVIDIA driver version installed by `nvidia.run`.
+> **Note:** CMAKE_CUDA_ARCHITECTURES=75 targets GTX 1650 (Turing).
+> For other GPUs: RTX 30xx = 86, RTX 40xx = 89, A100 = 80, H100 = 90
 
 ### llama-server.service
 
@@ -287,8 +268,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=ubuntu
-Environment=GGML_VK_VISIBLE_DEVICES=0
+User=root
+SupplementaryGroups=render video
 ExecStart=/opt/llama/llama-server \
     -m /data/models/gguf/qwen2.5-0.5b-instruct-q4_k_m.gguf \
     --host 0.0.0.0 \
@@ -302,9 +283,9 @@ WantedBy=multi-user.target
 ```
 
 Key parameters:
-- `GGML_VK_VISIBLE_DEVICES=0` — use GPU 0 via Vulkan
-- `-ngl 99` — offload all 99 layers to GPU
+- `-ngl 99` — offload all layers to GPU (CUDA auto-selects device)
 - `-m` — path to the GGUF model file
+- `SupplementaryGroups=render video` — ensures GPU device access
 
 ### Model file
 
@@ -366,7 +347,7 @@ autoinstall:
             addresses: [223.5.5.5, 8.8.8.8]
 
   # 1G EFI + 1G Boot + remaining XFS Root
-  # Matches disks 700G ~ 1024G
+  # Matches disks 700G ~ 1024G (system disk only, data disk untouched)
   storage:
     config:
       - type: disk
@@ -455,6 +436,7 @@ autoinstall:
     - wget http://192.168.70.230/wubantu/ubuntu-22.04.5-custom/payload/gpu-inference/nvidia-driver/current/nvidia.run -O /target/tmp/nvidia.run
     - curtin in-target -- chmod +x /tmp/nvidia.run
     - curtin in-target -- sh -c "/tmp/nvidia.run --silent --no-nouveau-check --skip-module-load --kernel-source-path=/usr/src/linux-headers-5.15.0-119-generic --kernel-name=5.15.0-119-generic 2>&1 | tee /var/log/nvidia-install.log || true"
+    # Lock kernel version to prevent driver breakage on kernel upgrade
     - curtin in-target -- sh -c "apt-mark hold linux-image-5.15.0-119-generic linux-headers-5.15.0-119-generic linux-image-generic linux-headers-generic linux-generic"
 
     # --- CUDA ---
@@ -465,16 +447,10 @@ autoinstall:
     - curtin in-target -- sh -c "echo 'export PATH=/usr/local/cuda/bin:\$PATH' > /etc/profile.d/cuda.sh"
     - curtin in-target -- sh -c "echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH' >> /etc/profile.d/cuda.sh"
 
-    # --- Vulkan runtime dependencies ---
-    - wget http://192.168.70.230/wubantu/ubuntu-22.04.5-custom/payload/gpu-inference/llama/vulkan-pkgs.tar.gz -O /target/tmp/vulkan-pkgs.tar.gz
-    - curtin in-target -- tar xzf /tmp/vulkan-pkgs.tar.gz -C /tmp/
-    - curtin in-target -- sh -c "dpkg -i /tmp/vulkan-pkgs/*.deb || true"
-
-    # --- llama.cpp (Vulkan GPU build) ---
+    # --- llama.cpp (CUDA build, statically linked) ---
     - wget http://192.168.70.230/wubantu/ubuntu-22.04.5-custom/payload/gpu-inference/llama/current/llama.tar.gz -O /target/tmp/llama.tar.gz
-    - curtin in-target -- mkdir -p /opt/llama
-    - curtin in-target -- tar xzf /tmp/llama.tar.gz -C /opt/llama
-    - curtin in-target -- chmod +x /opt/llama/llama-server
+    - curtin in-target -- mkdir -p /opt/
+    - curtin in-target -- tar xzf /tmp/llama.tar.gz -C /opt/
 
     # --- Model ---
     - wget http://192.168.70.230/wubantu/ubuntu-22.04.5-custom/payload/gpu-inference/models/qwen2.5-0.5b-instruct-q4_k_m.gguf -O /target/tmp/qwen2.5-0.5b-instruct-q4_k_m.gguf
@@ -529,39 +505,50 @@ sh /tmp/nvidia.run --advanced-options 2>&1 | grep -i "load"
 
 ---
 
-## Vulkan vs CUDA Backend
+## Key Lesson: Kernel Lock
 
-llama.cpp supports two GPU backends. This deployment uses **Vulkan** as primary with CUDA also installed.
+**Problem:** After apt installing Vulkan packages, kernel upgraded automatically.
+NVIDIA driver compiled for old kernel → driver breaks after reboot.
+
+**Solution:** Lock kernel immediately after driver compilation:
+
+```bash
+apt-mark hold linux-image-5.15.0-119-generic \
+    linux-headers-5.15.0-119-generic \
+    linux-image-generic \
+    linux-headers-generic \
+    linux-generic
+```
+
+This is included in user-data late-commands after nvidia.run.
+
+---
+
+## CUDA vs Vulkan Backend
+
+llama.cpp supports multiple GPU backends. This deployment uses **CUDA** as primary.
 
 ```
-CUDA backend:
+CUDA backend (current):
   - NVIDIA proprietary API, best performance
   - Only works on NVIDIA GPUs
   - llama.cpp official first recommendation
-  - Loaded via dlopen (not visible in ldd output)
+  - Statically compiled into binary (no dlopen at runtime)
+  - GTX 1650 compute capability 7.5 (Turing architecture)
 
-Vulkan backend:
+Vulkan backend (backup, llama-vulkan-b8495):
   - Open standard: NVIDIA / AMD / Intel all supported
-  - Performance ~10% less than CUDA, negligible on small models
-  - GTX 1650 fully supported
-  - libggml-vulkan.so loaded at runtime
+  - Performance ~10% less than CUDA
+  - Requires runtime Vulkan ICD: libnvidia-gl-580 + nvidia_icd.json
+  - Known issue: nvidia.run overwrites apt-installed libGLX_nvidia.so,
+    breaking Vulkan. Fix: reinstall libnvidia-gl-580 after nvidia.run
 ```
 
-**How to verify which backend is active:**
+**Why CUDA was chosen over Vulkan:**
 
-```bash
-# Check Vulkan ICD configuration
-ls /usr/share/vulkan/icd.d/
-# Should show: nvidia_icd.json
-
-# Check GPU memory usage (Vulkan loaded = VRAM occupied)
-nvidia-smi
-# Process type C+G = Compute + Graphics (Vulkan)
-
-# Check llama-server runtime libraries
-ldd /opt/llama/llama-server | grep -E "vulkan|cuda"
-# Note: CUDA backend uses dlopen, not visible via ldd
-```
+- Vulkan ICD conflicts between nvidia.run and apt packages caused GPU not found
+- CUDA backend has no such conflict — compiled directly into binary
+- Static linking eliminates all runtime library dependency issues
 
 ---
 
@@ -574,9 +561,11 @@ nvidia-smi
 # 2. Verify CUDA toolkit
 nvcc --version
 
-# 3. Verify llama-server binary
-ls -l /opt/llama/llama-server
-/opt/llama/llama-server --version
+# 3. Verify llama-server binary and GPU recognition
+/opt/llama/llama-server --list-devices
+# Expected output:
+# ggml_cuda_init: found 1 CUDA devices (Total VRAM: 3712 MiB):
+#   Device 0: NVIDIA GeForce GTX 1650, compute capability 7.5
 
 # 4. Verify model file
 ls -lh /data/models/gguf/
@@ -587,47 +576,43 @@ systemctl status llama-server
 # 6. Verify port listening
 ss -tlnp | grep 8080
 
-# 7. Check startup logs (look for Vulkan/NVIDIA keywords)
-journalctl -u llama-server -n 50 --no-pager
+# 7. Check startup logs (look for CUDA keywords)
+journalctl -u llama-server -n 30 --no-pager | grep -E "cuda|CUDA|offload|GPU"
 
 # 8. Test inference (final validation)
 curl -s http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model":"qwen","messages":[{"role":"user","content":"你好"}],"max_tokens":50}' \
-  | python3 -m json.tool
+  | python3 -m json.tool --no-ensure-ascii
 
 # 9. Watch GPU utilization during inference
-watch nvidia-smi
+watch -n 1 nvidia-smi
 ```
 
-**Validation criteria (all 4 must pass):**
+**Validation criteria (all must pass):**
 
 ```
-✅ logs: offloaded 25/25 layers to GPU   # all layers on GPU
-✅ logs: Vulkan0 model buffer size        # Vulkan backend active
-✅ nvidia-smi: VRAM > 0MiB               # GPU memory occupied
-✅ nvidia-smi: GPU-Util > 0%             # GPU computing during inference
+✅ --list-devices: found 1 CUDA devices
+✅ logs: ggml_cuda_init: found 1 CUDA devices
+✅ logs: CUDA : ARCHS = 750
+✅ nvidia-smi: VRAM > 0MiB during inference
+✅ nvidia-smi: GPU-Util > 0% during inference
 ```
 
-**Expected output (GTX 1650 + Qwen2.5-0.5B Q4_K_M, validated):**
-
-```json
-{
-  "choices": [{
-    "finish_reason": "stop",
-    "message": { "role": "assistant", "content": "你好！很高兴见到你..." }
-  }],
-  "timings": {
-    "predicted_per_second": 61.54,
-    "prompt_per_second": 14.22
-  }
-}
-```
+**Expected startup log (validated on GTX 1650):**
 
 ```
-nvidia-smi output during inference:
-| 0  NVIDIA GeForce GTX 1650  ...  | 1074MiB / 4096MiB |  24%  Default |
-| 0   N/A  N/A   858   C+G   /opt/llama/llama-server   1063MiB |
+ggml_cuda_init: found 1 CUDA devices (Total VRAM: 3712 MiB):
+  Device 0: NVIDIA GeForce GTX 1650, compute capability 7.5, VMM: yes, VRAM: 3712 MiB
+build_info: b8881-0dedb9ef7
+system_info: n_threads = 6 | CUDA : ARCHS = 750 | USE_GRAPHS = 1 | ...
+```
+
+**Expected nvidia-smi during inference:**
+
+```
+| 0  NVIDIA GeForce GTX 1650  ...  | 2660MiB / 4096MiB |  96%  Default |
+| 0   N/A  N/A   xxx   C   /opt/llama/llama-server   xxxxMiB |
 ```
 
 ---
@@ -643,32 +628,50 @@ Blacklisting alone is not enough. Must run `update-initramfs -u` twice: before d
 **3. installer rollback**
 `--no-nouveau-check` skips detection but NOT modprobe. Only `--skip-module-load` prevents rollback.
 
-**4. Vulkan ldconfig shows empty**
-`ldconfig -p | grep nvidia | grep vulkan` returning empty is normal — Vulkan ICD is registered via `/usr/share/vulkan/icd.d/nvidia_icd.json`, not ldconfig. Verify with `ls /usr/share/vulkan/icd.d/` instead.
+**4. Kernel upgrade breaks driver**
+apt installing any package may pull in a new kernel as dependency.
+Fix: `apt-mark hold` on kernel packages immediately after driver install.
+Symptom: `nvidia-smi` fails after reboot, `lsmod | grep nvidia` empty.
 
-**5. ldd shows no vulkan/cuda**
-llama.cpp loads GPU backends via `dlopen` at runtime, not static linking. Empty `ldd` output for vulkan/cuda is expected behavior. Check `nvidia-smi` for actual GPU usage.
+**5. CUDA binary not finding GPU**
+Check CUDA environment variables are set:
+```bash
+echo $PATH | grep cuda
+echo $LD_LIBRARY_PATH | grep cuda
+# If missing: source /etc/profile.d/cuda.sh
+```
 
-**6. dpkg errors during vulkan-pkgs install**
-The `|| true` at the end of the dpkg command allows partial installs. Some packages may have dependency conflicts with existing system packages — this is acceptable as long as `libvulkan1` and `libnvidia-gl-*` install successfully.
+**6. ldd shows no cuda libs**
+With static linking (`-DBUILD_SHARED_LIBS=OFF`), CUDA is compiled into the binary.
+`ldd /opt/llama/llama-server` will not show cuda libs — this is expected.
+Verify with `--list-devices` instead.
+
+**7. Vulkan backend (backup) GPU not found**
+Root cause: `nvidia.run` overwrites `libGLX_nvidia.so` installed by `libnvidia-gl-580` apt package.
+Fix sequence (must be in this order):
+```bash
+sh nvidia.run ...           # 1. compile kernel module
+apt reinstall libnvidia-gl-580  # 2. restore correct Vulkan ICD library
+ldconfig
+```
 
 ---
 
 ## Version Upgrade
 
 ```bash
-# Upgrade llama.cpp only - user-data unchanged
-ln -sfn llama-vulkan-b8496 .../payload/gpu-inference/llama/current
+# Upgrade llama.cpp — recompile from source, repackage, update symlink
+ln -sfn llama-cuda-src2505 .../payload/gpu-inference/llama/current
 
 # Upgrade NVIDIA driver
 ln -sfn 590.x.xx .../payload/gpu-inference/nvidia-driver/current
+# Note: also update --kernel-name in user-data if kernel changes
 
 # Upgrade CUDA
 ln -sfn cuda-14.x.x .../payload/gpu-inference/cuda/current
 
 # Switch to a different model
-# Just change the -m path in llama-server.service
-# No user-data change needed
+# Change -m path in llama-server.service, no user-data change needed
 ```
 
 ---
